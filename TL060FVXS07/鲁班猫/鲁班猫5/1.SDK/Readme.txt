@@ -1,0 +1,2 @@
+该SDK是在鲁班猫LubanCat_Linux_Generic_SDK_20251029基础上只对MIPI_DSI0和触摸部分进行了修改，其他未修改。
+本人构建的镜像是基于5.10内核的debian11,镜像位置在SDK的LubanCat_Linux_Generic_SDK\output\update\Image\ update.img
