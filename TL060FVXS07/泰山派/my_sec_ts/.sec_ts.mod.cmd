@@ -1,0 +1,1 @@
+cmd_drivers/input/touchscreen/sec_ts/sec_ts.mod := printf '%s\n'   sec_ts_main.o sec_ts_fw.o sec_ts_fn.o sec_ts_selftest.o | awk '!x[$$0]++ { print("drivers/input/touchscreen/sec_ts/"$$0) }' > drivers/input/touchscreen/sec_ts/sec_ts.mod
