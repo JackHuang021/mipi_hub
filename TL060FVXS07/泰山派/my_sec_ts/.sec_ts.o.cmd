@@ -1,0 +1,1 @@
+cmd_drivers/input/touchscreen/sec_ts/sec_ts.o := aarch64-linux-gnu-ld -EL  -maarch64elf -z noexecstack --no-warn-rwx-segments   -r -o drivers/input/touchscreen/sec_ts/sec_ts.o @drivers/input/touchscreen/sec_ts/sec_ts.mod 
