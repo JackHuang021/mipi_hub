@@ -6,7 +6,7 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 #### 最新动态
 + 2017.3.12 落笔画秋枫适配q6a
 + 2017.3.11 arc适配香橙派5 pro、香橙派5 plus
-+ 2027.3.10 cheungxh适配kickpi RK3568
++ 2027.3.10 cheungxh适配kickpi k1
 + 2026.3.7 力雪风扇到位，买屏幕送5t/5b/5b+风扇活动进行中（13/100）
 + 2026.3.7 5t初步调通（ARC）
 + 2026.3.7 5c合并分支（心平气和，切换到4d转接板）
@@ -64,7 +64,7 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 |鲁班猫|  鲁班猫2  |     待测试    |    |     |
 |鲁班猫|  鲁班猫1  |     完成    |    |     |
 |泰山派|  泰山派   | 完成   |  完成   |
-|kickpi | RK3568 | 完成   |  完成   |
+|kickpi | kickpi k1 | 完成   |  完成   |
 |友善|  nanopc T4  |   进行中   |    |     |
 |阿这派| rk3566   |   已完成       |    |     |
 |啊这派 | a733（热成像版） | 废案，合并rk3576分支| | |
@@ -85,7 +85,7 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 + TL060FVXS07 泰山派适配 sigmenx
 + TL060FVXS07 rock5t适配 Arc
 + TL060FVXS07 鲁班猫2适配 寄寒星
-+ TL060FVXS07 kickpi(rk3568）适配 寄寒星cheungxh
++ TL060FVXS07 kickpi k1适配 寄寒星cheungxh
 + TL060FVXS07 香橙派5 pro适配 Arc
 + TL060FVXS07 香橙派5 plus适配 Arc
 + TL060FVXS07 q6a适配 落笔画秋枫
