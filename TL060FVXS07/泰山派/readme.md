@@ -9,7 +9,7 @@ This dtsi file fit TaishanPi & TIANMA TL060FVXS08 2160*1080 TFT-LCD & Samsung To
 ## 内核修改步骤：
 注意：本工程所使用的系统版本基于：https://github.com/CmST0us/tspi-linux-sdk
 
-（1）将 tspi-rk3566-dsi-v10-天马6寸1080p屏幕.dtsi 中的内容复制到  tspi-linux-sdk/kernel/arch/arm64/boot/dts/tspi-rk3566-dsi-v10.dtsi 中
+（1）将 tspi-rk3566-dsi-v10-天马6寸1080p屏幕.dtsi 中的内容复制到  tspi-linux-sdk/kernel/arch/arm64/boot/dts/rockchip/tspi-rk3566-dsi-v10.dtsi 中
 
 （2）将 my_sec_ts 文件夹复制到 tspi-linux-sdk/kernel/drivers/input/touchscreen 中
 
