@@ -1,0 +1,197 @@
+From: LoveSy <shana@zju.edu.cn>
+Subject: [PATCH] pwm: add fixed LicheePi 4A TL060FVXS07 backlight
+
+Linux-only board support. No Android build or userspace dependencies.
+See ../README.md for kernel baseline, explicit opt-in and adapter limitations.
+
+Signed-off-by: LoveSy <shana@zju.edu.cn>
+---
+diff --git a/drivers/pwm/Kconfig b/drivers/pwm/Kconfig
+index e8886a9..a233a9f 100644
+--- a/drivers/pwm/Kconfig
++++ b/drivers/pwm/Kconfig
+@@ -772,2 +772,12 @@ config PWM_TEGRA
+ 
++config PWM_TH1520_LPI4A_TL060
++	tristate "LicheePi 4A TL060FVXS07 fixed backlight"
++	depends on ARCH_THEAD && OF && GPIOLIB && COMMON_CLK
++	depends on PWM_TH1520 = n
++	help
++	  Fixed 40 kHz / 20 percent PWM0 backlight for the LPi4A TL060 panel.
++	  This board-specific module leaves the bootloader PWM1 fan alone.
++	  Explicit enable=1 is required when loading lpi4a_tl060_backlight.
++	  It cannot run alongside the generic TH1520 PWM controller driver.
++
+ config PWM_TH1520
+diff --git a/drivers/pwm/Makefile b/drivers/pwm/Makefile
+index 5630a52..b154b86 100644
+--- a/drivers/pwm/Makefile
++++ b/drivers/pwm/Makefile
+@@ -2,2 +2,3 @@
+ obj-$(CONFIG_PWM)		+= core.o
++obj-$(CONFIG_PWM_TH1520_LPI4A_TL060) += lpi4a_tl060_backlight.o
+ obj-$(CONFIG_PWM_AB8500)	+= pwm-ab8500.o
+diff --git a/drivers/pwm/lpi4a_tl060_backlight.c b/drivers/pwm/lpi4a_tl060_backlight.c
+new file mode 100644
+index 0000000..0a3323f
+--- /dev/null
++++ b/drivers/pwm/lpi4a_tl060_backlight.c
+@@ -0,0 +1,158 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Fixed LPi4A PWM0 backlight, 40 kHz / 20%. PWM1 belongs to the fan.
++ * This is a board-specific bring-up module, not a generic PWM provider.
++ */
++#include <linux/bitops.h>
++#include <linux/clk.h>
++#include <linux/clk-provider.h>
++#include <linux/delay.h>
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/gpio/consumer.h>
++#include <linux/gpio/machine.h>
++#include <linux/io.h>
++#include <linux/ioport.h>
++#include <linux/module.h>
++#include <linux/of.h>
++
++#define PWM_BASE 0xffec01c000ULL
++#define PIN_BASE 0xffec007000ULL
++#define CTRL 0x00
++#define PERIOD 0x08
++#define FIRST_PHASE 0x0c
++#define STATUS 0x10
++#define START BIT(0)
++#define UPDATE BIT(2)
++#define CONTINUOUS BIT(5)
++#define FPOUT BIT(8)
++#define INACTOUT BIT(9)
++#define PIN_MUX 0x410
++#define PIN_PAD 0x44
++#define PIN_MUX_MASK GENMASK(11, 8)
++#define PIN_PAD_MASK GENMASK(15, 0)
++
++static bool enable;
++module_param(enable, bool, 0400);
++MODULE_PARM_DESC(enable, "Explicitly enable the fixed 20-percent LPi4A backlight");
++
++static struct gpiod_lookup_table gpio_lookup = {
++    .dev_id = "lpi4a-tl060-backlight",
++    .table = {
++        GPIO_LOOKUP("ffe7f38000.gpio", 2, "enable", GPIO_ACTIVE_HIGH),
++        { },
++    },
++};
++
++static struct device *dev;
++static struct gpio_desc *gpio;
++static struct clk *clk;
++static void __iomem *pwm, *pin;
++static u32 saved[4], fan[4], mux, pad;
++static bool region, enabled_clk, saved_regs, saved_pin, lookup_added;
++
++static void backlight_cleanup(void)
++{
++    unsigned int i;
++
++    if (!region) return;
++    if (saved_regs) writel(readl(pwm + CTRL) & ~(START | INACTOUT), pwm + CTRL);
++    if (saved_pin) {
++        writel(readl(pin + PIN_MUX) & ~PIN_MUX_MASK, pin + PIN_MUX);
++        gpiod_set_value_cansleep(gpio, 0);
++        gpiod_put(gpio);
++        writel((readl(pin + PIN_PAD) & ~PIN_PAD_MASK) | (pad & PIN_PAD_MASK), pin + PIN_PAD);
++        writel((readl(pin + PIN_MUX) & ~PIN_MUX_MASK) | (mux & PIN_MUX_MASK), pin + PIN_MUX);
++    }
++    if (lookup_added) gpiod_remove_lookup_table(&gpio_lookup);
++    if (dev) root_device_unregister(dev);
++    if (saved_regs) {
++        for (i = 1; i < 4; ++i) writel(saved[i], pwm + i * 4);
++        writel(saved[0], pwm + CTRL);
++        for (i = 0; i < 4; ++i)
++            if (readl(pwm + 0x20 + i * 4) != fan[i])
++                pr_warn("lpi4a-tl060-backlight: fan register changed at %x\n", 0x20 + i * 4);
++    }
++    if (enabled_clk) clk_disable_unprepare(clk);
++    if (!IS_ERR_OR_NULL(clk)) clk_put(clk);
++    if (pwm) iounmap(pwm);
++    if (pin) iounmap(pin);
++    release_mem_region(PWM_BASE, 0x20);
++}
++
++static int __init backlight_init(void)
++{
++    struct device_node *np;
++    struct of_phandle_args args = {.args_count = 1, .args = {51}};
++    const u32 cycles = 24000000 / 40000;
++    unsigned int high = 0, fast_high = 0, i;
++    int ret;
++
++    if (!enable || !of_machine_is_compatible("sipeed,lichee-pi-4a"))
++        return -ENODEV;
++    if (!request_mem_region(PWM_BASE, 0x20, "lpi4a-tl060-backlight"))
++        return -EBUSY;
++    region = true;
++    pwm = ioremap(PWM_BASE, 0x40); /* PWM1 is only read for the fan snapshot. */
++    pin = ioremap(PIN_BASE, 0x500);
++    if (!pwm || !pin) { ret = -ENOMEM; goto fail; }
++    np = of_find_compatible_node(NULL, NULL, "thead,th1520-clk-ap");
++    if (!np) { ret = -ENODEV; goto fail; }
++    args.np = np;
++    clk = of_clk_get_from_provider(&args);
++    of_node_put(np);
++    if (IS_ERR(clk)) { ret = PTR_ERR(clk); goto fail; }
++    /* Don't gate a clock already running the bootloader-configured PWM1 fan. */
++    if (!__clk_is_enabled(clk)) {
++        ret = clk_prepare_enable(clk);
++        if (ret) goto fail;
++        enabled_clk = true;
++    }
++    if (readl(pwm + CTRL) & START) { ret = -EBUSY; goto fail; }
++    mux = readl(pin + PIN_MUX);
++    pad = readl(pin + PIN_PAD);
++    if (mux & PIN_MUX_MASK) { ret = -EBUSY; goto fail; }
++    dev = root_device_register("lpi4a-tl060-backlight");
++    if (IS_ERR(dev)) { ret = PTR_ERR(dev); dev = NULL; goto fail; }
++    gpiod_add_lookup_table(&gpio_lookup);
++    lookup_added = true;
++    gpio = gpiod_get(dev, "enable", GPIOD_OUT_LOW);
++    if (IS_ERR(gpio)) { ret = PTR_ERR(gpio); gpio = NULL; goto fail; }
++    saved_pin = true;
++    for (i = 0; i < 4; ++i) {
++        saved[i] = readl(pwm + i * 4);
++        fan[i] = readl(pwm + 0x20 + i * 4);
++    }
++    saved_regs = true;
++    /* Actual PWM counter source is 24 MHz, not the APB gate's CCF rate. */
++    writel(CONTINUOUS | FPOUT, pwm + CTRL);
++    writel(cycles, pwm + PERIOD);
++    writel(cycles / 5, pwm + FIRST_PHASE);
++    writel(CONTINUOUS | FPOUT | UPDATE, pwm + CTRL);
++    usleep_range(10, 20);
++    writel(readl(pwm + CTRL) | START, pwm + CTRL);
++    msleep(2);
++    /* Retain the tested stuck-output guard while the pin is still GPIO low.
++     * These reads check startup, rather than logging or adjusting brightness.
++     */
++    for (i = 0; i < 20000; ++i)
++        fast_high += !!(readl(pwm + STATUS) & BIT(9));
++    for (i = 0; i < 10000; ++i) {
++        high += !!(readl(pwm + STATUS) & BIT(9));
++        udelay(1 + (i * 7) % 17);
++    }
++    if (!high || high > 3000 || fast_high < 2000 || fast_high > 6000) {
++        ret = -ERANGE;
++        goto fail;
++    }
++    writel(readl(pin + PIN_PAD) & ~BIT(9), pin + PIN_PAD);
++    writel((readl(pin + PIN_MUX) & ~PIN_MUX_MASK) | BIT(8), pin + PIN_MUX);
++    return 0;
++fail:
++    backlight_cleanup();
++    return ret;
++}
++
++module_init(backlight_init);
++module_exit(backlight_cleanup);
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("LicheePi 4A TL060FVXS07 fixed 40kHz/20% backlight");
