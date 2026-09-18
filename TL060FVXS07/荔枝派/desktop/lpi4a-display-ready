@@ -1,0 +1,14 @@
+#!/bin/sh
+# RevyOS/Xorg initial-scanout workaround. Runs once per display-server start.
+# No register writes, GPIO resets, firmware uploads or background retry loop.
+set -eu
+test -d /sys/module/lpi4a_tl060 || exit 0
+test -n "${DISPLAY:-}" || exit 1
+/usr/bin/xset dpms force off
+sleep 1
+/usr/bin/xset dpms force on
+# force on enables DPMS, so disable timeouts AFTER it.
+/usr/bin/xset -dpms
+/usr/bin/xset s off
+echo 1 > /sys/class/backlight/pwm-backlight@0/brightness
+logger -t lpi4a-tl060 'Display startup cycle complete; backlight requested at 20%'

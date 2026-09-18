@@ -1,88 +1,138 @@
 # 荔枝派 4A → TL060FVXS07
 
-本目录仅提供 LicheePi 4A（TH1520）的 **Linux DRM/KMS 显示和背光适配**。
-屏幕竖屏分辨率为 1080 × 2160；不包含 Android 专属构建、启动、显示 HAL 或编码器修改。
+荔枝派4A（TH1520）的Linux显示、背光和Samsung S6D6FT0触控适配。
+直接提供两个**外挂内核模块源码**及设备树，不再通过patch修改内核源码；
+不包含AOSP/HAL改动、预编译模块、系统镜像或调试日志。
 
-## 转接板与触控限制
+## 接线
 
-**当前转接板不兼容荔枝派 4A 的完整显示＋触控接口，不能当成即插即用转接板。**
-显示实测点亮不代表供电、触控与所有引脚已经兼容。使用前仍需按荔枝派扩展板、
-转接板及屏幕的原理图核对接线、供电和限流；不要只按连接器外形或泰山派配置接线。
+6pin触摸排线使用正向线；如果使用反向线，**荔枝派端铜触点朝PCB外**。
+屏幕端按连接器触点方向插入，不要仅凭蓝色加强片判断。插拔排线前断电。
+触摸使用扩展板J1901、I2C3地址0x48，中断为AON GPIO3。
 
-尤其是触控：荔枝派扩展板 TP 供电为 2.8 V，I2C3 的板端外部上拉为 1.8 V；
-泰山派参考接口的 TP 供电和 I²C 上拉为 3.3 V。屏幕支持某种供电电压，
-不代表触控 I/O 电平也已匹配。SoC 内部上拉不能替代对此处外部上拉/电平连接的核对。
-**触控等转接板硬改、确认电气兼容后再适配，本次不加入触控驱动或触控设备树节点。**
+## 已验证环境与范围
 
-## 支持范围
+- 荔枝派4A，8G RAM / 32G eMMC，TL060FVXS07。
+- 官方[RevyOS 20260504](https://mirror.iscas.ac.cn/revyos/extra/images/lpi4a/20260504/)、
+  官方U-Boot及未修改的官方内核 **6.6.137-th1520**。
+  内核源码提交：`cca7502e0443b90c5ab24fd47487f1747e450b38`。
+- DSI0四lane、RGB888 burst，1080×2160，148.5MHz像素时钟、950Mbit/s lane rate，
+  实际刷新率约 **56.2Hz**，不是60Hz。水平porch/sync为115/3/13，垂直为10/2/10。
+- 使用现有Linux regulator / pwm-backlight，PWM0为40kHz，实测背光20%；
+  PWM1风扇不由本模块操作。20%占空比不等于峰值电流限制或电气安全保证。
+- Type-B多点触控，已验证点击、Chromium双指缩放、桌面旋转后的触控映射。
+  声明10个槽位，但没有完成十指全量测试。
+- 已验证整镜刷入后的自动亮屏、登录软键盘和触控旋转跟随。
+  16G设备树做编译检查，**未在16G实机验证**。
 
-- DSI0，4 lanes，RGB888，burst video；DPU output 0 → DSI。
-- 保留 output 1 的 HDMI，不替换已有的下游 DT graph。
-- 像素时钟 148.5 MHz，lane rate 950 Mbit/s，实际刷新率约 **56.2 Hz**，不是 60 Hz。
-- 时序沿用泰山派目录的 porches：水平 115/3/13，垂直 10/2/10；
-  TH1520 使用已验证的 148.5 MHz 像素时钟，不照搬参考 DTS 的 157 MHz。
-- 面板命令为 `0x11`（退出休眠，等待 120 ms）、`0x29`（开显示）；
-  停止显示时发送 `0x28`、`0x10`。依赖面板上电复位，未假定泰山派 reset GPIO 可直接复用。
-- PWM0 背光固定 **40 kHz / 20%**，卸载背光模块关闭并恢复配置；不写 PWM1 风扇寄存器。
-  20% 是此接线下的实测亮度设置，不是电气安全保证，也不能替代硬件峰值电流限制。
+这是固定板型/面板的适配，不是通用DSI host驱动。不能直接用于RevyOS5.10、
+其他面板或任意主线内核；DT标签、clock provider ABI和DRM接口需要匹配目标内核。
+深度休眠、触摸唤醒、HDMI/DSI多屏组合及长时间稳定性仍需进一步测试。
 
-这是固定板型的 bring-up 实现，尚不是通用 DT panel/DSI host/PWM 驱动。
-MMIO 地址、时钟和 GPIO 对应 TH1520/LPi4A，默认不开启；不能用于其他板型。
-背光没有实现通用 `pwm-backlight` 亮度调节接口，保持固定 20%。
+## 文件与资源所有权
 
-## 内核前提
+`linux/`包含显示模块`lpi4a_tl060.c`、触控模块`s6d6ft0.c`、对应头文件、
+`th1520-lichee-pi-4a-tl060.dts`、Makefile和模块配置。
+`desktop/`是可选的RevyOS Xfce/LightDM接入，不是内核补丁。
 
-适用于 Linux 7.1 开发期的 `drivers/gpu/drm/verisilicon` 驱动接口。
-对齐基线为 [`648fd74a4d2eaed87fe242e26506f724619dacff`](https://android.googlesource.com/kernel/common/+/648fd74a4d2eaed87fe242e26506f724619dacff)，
-使用其中 Linux 的 DRM bridge API、TH1520 AP/VO clock 与 GPIO provider。
-补丁本身只有 Linux Kconfig/Kbuild/C 代码，不依赖 AOSP 构建工具。
+显示模块接管DSI0及对应PHY，保留官方DC/HDMI驱动；DTS禁用原生DSI0 PHY并更换host
+compatible，避免两套实现争用。模块按clock provider选择时钟ID，不能将主线ID
+照搬到RevyOS vendor provider。DCS电源状态只检查有效状态位，不要求保留位D7为1。
 
-**不适用于直接套用到 vendor/RevyOS 5.10 的另一套 DRM/DSI 驱动。**
-若内核已经有 DSI0 host、面板 graph 或 PWM0 驱动，请用该内核的原生框架接入，
-不要让两套驱动同时操作相同寄存器。当前 DPU output 0 必须没有已有的下游 graph；
-TH1520 AP/VO clock、GPIO 与 Verisilicon DC 的基础支持需要事先具备。
+触控不升级固件、不写校准/NVM，也不独立操作共享面板复位线。控制器需要有有效的原厂固件。
+该面板接触时压力值仍为0，因此不声明这个无效压力轴。触控DT使用直接IRQ资源；
+不要重复添加`irq-gpios`或创建第二个0x48客户端。
 
-## 集成与使用
+## 构建
 
-在符合上述前提的 Linux 内核源码树中，按顺序检查并应用本目录的两个补丁：
+必须使用**实际运行内核对应**的配置、准备好的构建目录及`Module.symvers`。
+不要为消除编译错误随意关闭配置，尤其不要改变`CONFIG_DEBUG_INFO_BTF_MODULES`
+后仍把模块用于原版内核。仅vermagic相同不能证明完整ABI兼容。
+
+在有匹配头文件/构建目录的板上：
 
 ```sh
-git apply --check /path/to/荔枝派/linux/0001-lpi4a-tl060-dsi.patch
-git apply /path/to/荔枝派/linux/0001-lpi4a-tl060-dsi.patch
-git apply --check /path/to/荔枝派/linux/0002-lpi4a-tl060-backlight.patch
-git apply /path/to/荔枝派/linux/0002-lpi4a-tl060-backlight.patch
+cd linux
+make KDIR=/lib/modules/$(uname -r)/build
 ```
 
-在原有可启动的荔枝派内核配置上启用：
+交叉编译示例使用已验证的GCC14，路径替换成自己的目标内核目录：
+
+```sh
+make KDIR=/path/to/kernel-src KOUT=/path/to/kernel-out \
+  ARCH=riscv CROSS_COMPILE=riscv64-linux-gnu- CC=riscv64-linux-gnu-gcc-14 \
+  LOCALVERSION=-th1520
+make dtbs KERNEL_SRC=/path/to/kernel-src CC=riscv64-linux-gnu-gcc-14
+```
+
+输出`lpi4a_tl060.ko`、`s6d6ft0.ko`和分别基于官方8G/16G板级DTS的两个DTB。
+DTB构建需要完整目标内核的DTS/include文件。不要给16G板使用8G内存描述。
+`LOCALVERSION`示例对应上述官方内核，其他目标应保持自己的完整内核版本，不要重复追加后缀。
+
+## 安装与自动启动
+
+先备份原boot/DTB/initramfs，并保留串口恢复路径。以下命令在目标板上执行：
+
+```sh
+sudo install -d /lib/modules/$(uname -r)/extra
+sudo install -m 644 lpi4a_tl060.ko s6d6ft0.ko /lib/modules/$(uname -r)/extra/
+sudo install -m 644 lpi4a-tl060.conf /etc/modprobe.d/
+sudo depmod -a
+```
+
+按发行版启动配置选择本板型的新DTB。官方RevyOS通过extlinux的`fdtdir`选择DTB，
+通常位于`/boot/dtbs/linux-image-$(uname -r)/thead/`：
+8G板对应`th1520-lichee-pi-4a.dtb`，16G板对应`th1520-lichee-pi-4a-16g.dtb`。
+备份后用对应生成文件替换，或建立独立extlinux测试项指向它。
+**不是只装ko就能省略DTB**，也不要同时启用原生DSI0 host/PHY。
+
+将下面几行加入`/etc/initramfs-tools/modules`，随后运行`sudo update-initramfs -u`：
 
 ```text
-CONFIG_DRM_VERISILICON_DC=m
-CONFIG_PWM=y
-# CONFIG_PWM_TH1520 is not set
-CONFIG_PWM_TH1520_LPI4A_TL060=m
+fixed
+pwm_bl
+pwm_fan
+lpi4a_tl060 backlight=1
+s6d6ft0
 ```
 
-按所用 Linux 发行版的正常流程构建/安装内核及匹配模块。确认接线和转接板后，
-在图形会话启动前加载（不要在使用中的 DRM 驱动上强制卸载/重载）：
+最终initramfs必须包含官方供电、PWM依赖和新增模块。若自行拆包，必须合并所有
+early/main段后生成完整模块索引，不能只对新增模块运行depmod覆盖原索引。
+使用`lsinitramfs`核对文件，并以重启后的实际绑定结果验收。
+
+默认`backlight=0`供手动测试，自动亮屏配置使用`backlight=1`。背光表为0/20/100，
+sysfs亮度索引1才是本次验证的20%；**索引2为100%，未经本次验证**。
+显示重新启用时保留用户亮度，不再覆盖为0。不要在使用中的DRM桥上强制卸载模块或解绑设备。
+
+## 可选：RevyOS桌面接入
+
+- **首次显示规避措施**：`lpi4a-display-ready`由LightDM的display-setup-script调用，
+  在X启动时执行一次正常DPMS关闭/开启，恢复20%背光并关闭自动熄屏，
+  规避当前首次扫描输出偶发黑屏。这不是根因已修复的声明，也不是后台反复点亮。
+- **触控旋转**：`lpi4a-touch-map.py`在Xfce会话中监听XRandR事件，调用系统
+  `xinput map-to-output`把Samsung触控映射到DSI-1，处理旋转/反射/输出位置。
+  只改这一触控设备，不改蓝牙鼠标或底层校准；不采用轮询。
+- **登录键盘**：安装发行版的`onboard`软件包，使用`80-tl060-keyboard.conf`。
+  只保证登录键盘；桌面输入框自动弹出是另一项功能。
+- `xfce4-power-manager.desktop`禁用电源管理器自启动，以维持当前测试的20%背光。
+  这是当前验证配置，不代表已经完成通用电源管理。
+
+从本目录安装桌面接入文件：
 
 ```sh
-modprobe verisilicon-dc lpi4a_dsi0=1
-modprobe lpi4a_tl060_backlight enable=1
+sudo install -d /usr/local/libexec /etc/lightdm/lightdm.conf.d \
+  /etc/lightdm/lightdm-gtk-greeter.conf.d /etc/xdg/autostart
+sudo install -m 755 desktop/lpi4a-display-ready desktop/lpi4a-touch-map.py /usr/local/libexec/
+sudo install -m 644 desktop/50-tl060-display.conf /etc/lightdm/lightdm.conf.d/
+sudo install -m 644 desktop/80-tl060-keyboard.conf /etc/lightdm/lightdm-gtk-greeter.conf.d/
+sudo install -m 644 desktop/lpi4a-touch-map.desktop desktop/xfce4-power-manager.desktop /etc/xdg/autostart/
 ```
 
-若 DC 已在开机加载，需要预先通过该发行版的 modprobe 配置传入
-`options verisilicon_dc lpi4a_dsi0=1`，而不是在已加载后再传参数。
-使用 `modetest -c` / `modetest -p` 查询本机 connector/CRTC/plane ID，再选择
-DSI 的 1080x2160 模式；不要硬编码其他机器的 DRM 对象 ID。
+已有LightDM display-setup-script时应合并调用，不能覆盖其他必要初始化。
+安装后注销/重启验证，不要在有未保存工作的会话中直接重启显示管理器。
+6寸屏建议在Xfce设置2×缩放后重新登录；本次热切换菜单裁剪异常在重启后恢复。
 
-## 验证与后续
-
-原显示/背光实现已在荔枝派 4A 实机通过真实 DRM framebuffer 输出与物理屏幕显示，
-并以固定 20% 背光运行。本次从该实现精简诊断读取/日志和可变亮度测试入口，
-保留显示时序、寄存器配置、资源冲突检查与背光输出检查。
-精简后的补丁做独立应用和模块编译检查，**不把原实现的板测等同于本次精简版
-在所有发行版上的重新验证**。休眠/恢复、电源管理和通用 DT 接入仍需进一步完善。
-
-参考：本仓库 [泰山派](../泰山派/) 的屏幕时序与命令，以及
-[Sipeed 荔枝派 4A 外设说明](https://wiki.sipeed.com/hardware/zh/lichee/th1520/lpi4a/6_peripheral.html)。
-DSI/D-PHY 初始化保留原实现中 RevyOS/VeriSilicon 驱动来源与 GPL 标识。
+参考：[泰山派时序与Samsung协议源码](../泰山派/)、
+[Sipeed外设说明](https://wiki.sipeed.com/hardware/zh/lichee/th1520/lpi4a/6_peripheral.html)。
+DSI/D-PHY代码保留RevyOS/VeriSilicon来源及GPL标识；触控协议参考Samsung sec_ts，
+本实现不包含原版固件升级路径。

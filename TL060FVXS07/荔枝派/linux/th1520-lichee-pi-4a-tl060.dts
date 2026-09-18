@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Build against the board DTS shipped with the target kernel. */
+#ifndef TL060_BASE_DTS
+#define TL060_BASE_DTS "th1520-lichee-pi-4a.dts"
+#endif
+#include TL060_BASE_DTS
+
+/ {
+    model = "Sipeed Lichee Pi 4A with TL060FVXS07";
+};
+
+&lcd0_backlight {
+    pinctrl-names = "default";
+    pinctrl-0 = <&tl060_bl_pins>;
+    pwms = <&pwm 0 25000 0>;
+    brightness-levels = <0 20 100>;
+    default-brightness-level = <0>;
+};
+
+&padctrl0_apsys {
+    tl060_bl_pins: tl060-backlight-0 {
+        bl-pins {
+            pins = "GPIO3_2";
+            function = "pwm";
+            bias-disable;
+            drive-strength = <3>;
+            input-disable;
+            input-schmitt-disable;
+        };
+    };
+};
+
+&dpu_enc0 {
+    status = "okay";
+    ports {
+        port@1 {
+            reg = <1>;
+            tl060_encoder_out: endpoint {
+                remote-endpoint = <&tl060_bridge_in>;
+            };
+        };
+    };
+};
+
+&dhost_0 {
+    compatible = "sipeed,lpi4a-tl060-dsi";
+    /delete-property/ phys;
+    /delete-property/ phy-names;
+    vddio-supply = <&reg_vdd18_lcd0>;
+    vdd-supply = <&reg_vdd33_lcd0>;
+    backlight = <&lcd0_backlight>;
+    port {
+        tl060_bridge_in: endpoint {
+            remote-endpoint = <&tl060_encoder_out>;
+        };
+    };
+};
+
+/* The standalone driver owns the DSI0 PHY, not the in-tree PHY driver. */
+&dphy_0 { status = "disabled"; };
+&dsi0 { status = "okay"; };
+
+/* Direct IRQ resource: do not also request this pin through irq-gpios. */
+&padctrl_aosys {
+    tl060_touch_irq: tl060-touch-irq {
+        irq-pins {
+            pins = "CPU_JTG_TMS";
+            function = "gpio";
+            bias-pull-up = <48000>;
+            input-enable;
+        };
+    };
+};
+
+&i2c3 {
+    touchscreen@48 {
+        compatible = "samsung,s6d6ft0";
+        reg = <0x48>;
+        pinctrl-names = "default";
+        pinctrl-0 = <&tl060_touch_irq>;
+        interrupt-parent = <&aogpio>;
+        interrupts = <3 8>;
+        touchscreen-size-x = <1080>;
+        touchscreen-size-y = <2160>;
+        /* No shared reset, firmware upload, or voltage changes. */
+    };
+};

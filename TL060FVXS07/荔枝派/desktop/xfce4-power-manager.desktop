@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Power Manager
+Hidden=true
+# Keep the panel at the tested 20% brightness during this hardware adaptation.
