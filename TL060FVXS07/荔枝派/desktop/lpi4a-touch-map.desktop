@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lichee Pi touchscreen display mapping
+Exec=/usr/local/libexec/lpi4a-touch-map.py
+OnlyShowIn=XFCE;
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

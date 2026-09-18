@@ -1,0 +1,10 @@
+*.o
+*.ko
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+*.dtb
+*.preprocessed.dts
+.tmp_versions/
