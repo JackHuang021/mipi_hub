@@ -6,6 +6,7 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 交流群（QQ）：2160014849  答案：天马
 
 #### 最新动态
++ 2026.11 redstonee适配DshanPi-A1
 + 2026.4 Lyu适配roc-rk3588s-pc
 + 2026.4 落笔画秋枫合并a7a分支（需要补件！）
 + 2026.4 Arc适配香橙派5、roc-rk3568-pc、roc-rk3566-pc
@@ -75,6 +76,7 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 |啊这派 | rk3576（热成像\游戏机通用版） | 新坑| | |
 |树莓派| 树莓派5 | 进行中 | | |
 |树莓派| 树莓派4 | mipi通道不够，不支持 | | |
+|东山Pi| DshanPi-A1 | 完成 | 完成 | |
 
 #### 贡献者
 
@@ -96,4 +98,4 @@ MIPI HUB，让开发板用上超低价的高素质屏幕！
 + TL060FVXS07 a7a适配 jwdjy、落笔画秋枫
 + TL060FVXS07 香橙派5 适配 Arc
 + TL060FVXS07 roc-rk3588s-pc 适配 Lyu
-
++ TL060FVXS07 DshanPi-A1适配 [redstonee](https://github.com/redstonee)
