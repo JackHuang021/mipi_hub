@@ -1,0 +1,7 @@
+radxa-4d板子39pin0.3显示座子适配，并为别的radxa同接口屏幕适配提供参考
+1，将dtsi文件放到内核arch/arm64/boot/dts/rockchip/目录下，并且在radxa-4d设备树里面include该文件
+2，将sgm37604a.c背光驱动文件放到drivers/video/backlight/目录下，并且将Kconfig内容添加到内核当前目录的Kconfig中，将Makefile内容添加到内核当前目录的Makefile中，注意格式
+3，将CONFIG_BACKLIGHT_SGM37604=y添加到内核配置中，编译内核，刷入镜像
+4，将sec_ts触摸驱动文件夹放到drivers/input/touchscreen/目录下，并且在该目录中的Kconfig，Makefile中添加对应配置
+
+附armbian编译补丁，放入armbian编译脚本的userpatches/kernel/rk35xx-vendor-6.1/目录下，并且打开背光以及触摸驱动，选择radxa-4d板子即可自动编译适配好的镜像
