@@ -1,0 +1,1 @@
+obj-$(CONFIG_BACKLIGHT_SGM37604)	+= sgm37604a.o

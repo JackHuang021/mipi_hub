@@ -1,0 +1,12 @@
+.*
+*.mod
+*.mod.c
+*.ko
+*.o
+*.o.*
+Module.symvers
+dtbs-list
+builtin.order
+modules.order
+
+!.gitignore

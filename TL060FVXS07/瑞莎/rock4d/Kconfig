@@ -1,0 +1,14 @@
+config BACKLIGHT_SGM37604
+	tristate "SGM37604 Backlight Driver"
+	depends on I2C
+	help
+	  This enables support for SGM37604 I2C backlight driver.
+	  The SGM37604 is a high efficiency 4-string white LED driver
+	  with 12-bit brightness control via I2C.
+
+	  Device tree properties:
+	  - sgmicro,led-channels: bitmask for LED channels (default 0x0F)
+	  - sgmicro,max-current: max current setting 0-3 (25-40mA, default 0)
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called sgm37604.
